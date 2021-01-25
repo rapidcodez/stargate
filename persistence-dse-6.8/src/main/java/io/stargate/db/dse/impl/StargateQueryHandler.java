@@ -140,6 +140,10 @@ public class StargateQueryHandler implements QueryHandler {
       Map<String, ByteBuffer> customPayload,
       long queryStartNanoTime) {
 
+    if (customPayload != null && customPayload.containsKey("stargate.auth.subject.token")) {
+      authorizeByToken(customPayload, statement);
+    }
+
     for (QueryInterceptor interceptor : interceptors) {
       Single<ResultMessage> result =
           interceptor.interceptQuery(
@@ -147,10 +151,6 @@ public class StargateQueryHandler implements QueryHandler {
       if (result != null) {
         return result;
       }
-    }
-
-    if (customPayload != null && customPayload.containsKey("stargate.auth.subject.token")) {
-      authorizeByToken(customPayload, statement);
     }
 
     return QueryProcessor.instance.processStatement(
