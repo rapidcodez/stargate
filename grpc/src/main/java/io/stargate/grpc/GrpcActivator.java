@@ -16,6 +16,7 @@
 package io.stargate.grpc;
 
 import io.stargate.auth.AuthenticationService;
+import io.stargate.auth.AuthorizationService;
 import io.stargate.core.activator.BaseActivator;
 import io.stargate.core.metrics.api.Metrics;
 import io.stargate.db.DbActivator;
@@ -28,16 +29,15 @@ import org.jetbrains.annotations.Nullable;
 public class GrpcActivator extends BaseActivator {
   private GrpcImpl grpc;
   private final ServicePointer<Metrics> metrics = ServicePointer.create(Metrics.class);
-  private final ServicePointer<AuthenticationService> authentication =
+  private final ServicePointer<AuthenticationService> authenticationService =
       ServicePointer.create(
           AuthenticationService.class,
           "AuthIdentifier",
           System.getProperty("stargate.auth_id", "AuthTableBasedService"));
   private final ServicePointer<Persistence> persistence =
       ServicePointer.create(Persistence.class, "Identifier", DbActivator.PERSISTENCE_IDENTIFIER);
-
-  private static final boolean USE_AUTH_SERVICE =
-      Boolean.parseBoolean(System.getProperty("stargate.grpc_use_auth_service", "false"));
+  private final ServicePointer<AuthorizationService> authorizationService =
+      ServicePointer.create(AuthorizationService.class);
 
   public GrpcActivator() {
     super("gRPC", true);
@@ -49,7 +49,12 @@ public class GrpcActivator extends BaseActivator {
     if (grpc != null) { // Already started
       return null;
     }
-    grpc = new GrpcImpl(persistence.get(), metrics.get(), authentication.get());
+    grpc =
+        new GrpcImpl(
+            persistence.get(),
+            metrics.get(),
+            authenticationService.get(),
+            authorizationService.get());
     grpc.start();
 
     return null;
@@ -66,10 +71,7 @@ public class GrpcActivator extends BaseActivator {
 
   @Override
   protected List<ServicePointer<?>> dependencies() {
-    if (USE_AUTH_SERVICE) {
-      return Arrays.asList(metrics, persistence, authentication);
-    } else {
-      return Arrays.asList(metrics, persistence);
-    }
+    // TODO: Add authorization
+    return Arrays.asList(metrics, persistence, authenticationService);
   }
 }
