@@ -113,7 +113,7 @@ public class Service extends io.stargate.proto.StargateGrpc.StargateImplBase {
       afterPrepare.accept(prepared, null);
     } else {
       connection
-          .prepare(
+          .prepareNoCache(
               query.getCql(),
               ImmutableParameters.builder()
                   .tracingRequested(query.getParameters().getTracing())

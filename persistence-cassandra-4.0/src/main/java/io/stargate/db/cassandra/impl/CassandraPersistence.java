@@ -17,6 +17,7 @@ import io.stargate.db.PagingPosition;
 import io.stargate.db.Parameters;
 import io.stargate.db.Persistence;
 import io.stargate.db.Result;
+import io.stargate.db.Result.Prepared;
 import io.stargate.db.SimpleStatement;
 import io.stargate.db.Statement;
 import io.stargate.db.cassandra.impl.interceptors.DefaultQueryInterceptor;
@@ -41,8 +42,11 @@ import org.apache.cassandra.auth.AuthenticatedUser;
 import org.apache.cassandra.concurrent.LocalAwareExecutorService;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.cql3.CQLStatement;
+import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
+import org.apache.cassandra.cql3.ResultSet;
 import org.apache.cassandra.cql3.statements.BatchStatement;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.marshal.UserType;
@@ -81,6 +85,7 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.JVMStabilityInspector;
 import org.apache.cassandra.utils.MD5Digest;
 import org.apache.cassandra.utils.SystemTimeSource;
+import org.apache.tinkerpop.gremlin.structure.T;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -492,6 +497,34 @@ public class CassandraPersistence
           // that it's only computed now.
           System.nanoTime(),
           () -> new PrepareMessage(query, parameters.defaultKeyspace().orElse(null)));
+    }
+
+    @Override
+    public CompletableFuture<Prepared> prepareNoCache(String query, Parameters parameters) {
+      return runOnExecutor(
+          () -> {
+            QueryState queryState = new QueryState(clientState);
+            QueryOptions options = Conversion.toInternal(Collections.emptyList(), null, parameters);
+            QueryHandler queryHandler = ClientState.getCQLQueryHandler();
+            CQLStatement statement = queryHandler.parse(query, queryState, options);
+            QueryHandler.Prepared prepared = new QueryHandler.Prepared(statement, query);
+            String toHash = parameters.defaultKeyspace().map(k -> k + query).orElse(query);
+            MD5Digest statementId = MD5Digest.compute(toHash);
+            ResultSet.PreparedMetadata preparedMetadata =
+                ResultSet.PreparedMetadata.fromPrepared(prepared.statement);
+            ResultSet.ResultMetadata resultMetadata =
+                ResultSet.ResultMetadata.fromPrepared(prepared.statement);
+            ResultMessage.Prepared response =
+                new ResultMessage.Prepared(
+                    statementId,
+                    resultMetadata.getResultMetadataId(),
+                    preparedMetadata,
+                    resultMetadata);
+            return (Prepared)
+                Conversion.toResult(
+                    (ResultMessage) response, Conversion.toInternal(parameters.protocolVersion()));
+          },
+          false);
     }
 
     @Override

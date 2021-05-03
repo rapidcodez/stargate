@@ -20,6 +20,7 @@ import io.stargate.db.PagingPosition;
 import io.stargate.db.Parameters;
 import io.stargate.db.Persistence;
 import io.stargate.db.Result;
+import io.stargate.db.Result.Prepared;
 import io.stargate.db.SimpleStatement;
 import io.stargate.db.Statement;
 import io.stargate.db.datastore.common.AbstractCassandraPersistence;
@@ -50,16 +51,22 @@ import org.apache.cassandra.auth.IAuthContext;
 import org.apache.cassandra.auth.RoleResource;
 import org.apache.cassandra.auth.user.UserRolesAndPermissions;
 import org.apache.cassandra.concurrent.ExecutorLocals;
+import org.apache.cassandra.concurrent.TPC;
 import org.apache.cassandra.concurrent.TPCTaskType;
+import org.apache.cassandra.concurrent.TPCUtils;
 import org.apache.cassandra.config.Config;
 import org.apache.cassandra.config.DatabaseDescriptor;
+import org.apache.cassandra.cql3.CQLStatement;
 import org.apache.cassandra.cql3.PageSize;
+import org.apache.cassandra.cql3.QueryHandler;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
+import org.apache.cassandra.cql3.ResultSet;
 import org.apache.cassandra.cql3.statements.BatchStatement;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.marshal.UserType;
 import org.apache.cassandra.exceptions.AuthenticationException;
+import org.apache.cassandra.exceptions.UnauthorizedException;
 import org.apache.cassandra.gms.ApplicationState;
 import org.apache.cassandra.gms.EndpointState;
 import org.apache.cassandra.gms.Gossiper;
@@ -89,19 +96,22 @@ import org.apache.cassandra.transport.messages.ResultMessage;
 import org.apache.cassandra.transport.messages.StartupMessage;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.MD5Digest;
 import org.apache.cassandra.utils.flow.RxThreads;
+import org.apache.tinkerpop.gremlin.structure.T;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class DsePersistence
     extends AbstractCassandraPersistence<
-        Config,
-        KeyspaceMetadata,
-        TableMetadata,
-        ColumnMetadata,
-        UserType,
-        IndexMetadata,
-        ViewTableMetadata> {
+    Config,
+    KeyspaceMetadata,
+    TableMetadata,
+    ColumnMetadata,
+    UserType,
+    IndexMetadata,
+    ViewTableMetadata> {
+
   private static final Logger logger = LoggerFactory.getLogger(DsePersistence.class);
 
   public static final Boolean USE_PROXY_PROTOCOL =
@@ -213,7 +223,9 @@ public class DsePersistence
     waitForSchema(STARTUP_DELAY_MS);
 
     interceptor = new DefaultQueryInterceptor();
-    if (USE_PROXY_PROTOCOL) interceptor = new ProxyProtocolQueryInterceptor(interceptor);
+    if (USE_PROXY_PROTOCOL) {
+      interceptor = new ProxyProtocolQueryInterceptor(interceptor);
+    }
 
     interceptor.initialize();
     stargateHandler().register(interceptor);
@@ -284,10 +296,10 @@ public class DsePersistence
 
     // Collect schema IDs from all relevant nodes and check that we have at most 1 distinct ID.
     return Gossiper.instance.getLiveMembers().stream()
-            .filter(DsePersistence::shouldCheckSchema)
-            .map(Gossiper.instance::getSchemaVersion)
-            .distinct()
-            .count()
+        .filter(DsePersistence::shouldCheckSchema)
+        .map(Gossiper.instance::getSchemaVersion)
+        .distinct()
+        .count()
         <= 1;
   }
 
@@ -296,11 +308,11 @@ public class DsePersistence
     // Collect schema IDs from storage and local node and check that we have at most 1 distinct ID
     InetAddress localAddress = FBUtilities.getBroadcastAddress();
     return Gossiper.instance.getLiveMembers().stream()
-            .filter(DsePersistence::shouldCheckSchema)
-            .filter(ep -> isStorageNode(ep) || localAddress.equals(ep))
-            .map(Gossiper.instance::getSchemaVersion)
-            .distinct()
-            .count()
+        .filter(DsePersistence::shouldCheckSchema)
+        .filter(ep -> isStorageNode(ep) || localAddress.equals(ep))
+        .map(Gossiper.instance::getSchemaVersion)
+        .distinct()
+        .count()
         <= 1;
   }
 
@@ -312,11 +324,11 @@ public class DsePersistence
   boolean isStorageInSchemaAgreement() {
     // Collect schema IDs from storage nodes and check that we have at most 1 distinct ID.
     return Gossiper.instance.getLiveMembers().stream()
-            .filter(DsePersistence::shouldCheckSchema)
-            .filter(DsePersistence::isStorageNode)
-            .map(Gossiper.instance::getSchemaVersion)
-            .distinct()
-            .count()
+        .filter(DsePersistence::shouldCheckSchema)
+        .filter(DsePersistence::isStorageNode)
+        .map(Gossiper.instance::getSchemaVersion)
+        .distinct()
+        .count()
         <= 1;
   }
 
@@ -604,6 +616,49 @@ public class DsePersistence
     }
 
     @Override
+    public CompletableFuture<Prepared> prepareNoCache(String query, Parameters parameters) {
+      CompletableFuture<Prepared> future = new CompletableFuture<>();
+
+      try {
+        Single<QueryState> queryState = newQueryState();
+        queryState.flatMap(s -> {
+
+          if (!s.hasUser()) {
+            return Single.error(new UnauthorizedException("You have not logged in"));
+          }
+
+          Single<Prepared> resp = Single.defer(() -> {
+            CQLStatement statement = QueryProcessor.getStatement(query, s);
+            QueryHandler.Prepared prepared = new QueryHandler.Prepared(statement);
+            ResultSet.ResultMetadata resultMetadata = ResultSet.ResultMetadata
+                .fromStatement(statement);
+            String toHash = parameters.defaultKeyspace().map(k -> k + query).orElse(query);
+            MD5Digest statementId = MD5Digest.compute(toHash);
+            ResultMessage.Prepared response = new ResultMessage.Prepared(statementId,
+                resultMetadata.getResultMetadataId(),
+                statement);
+            return Single.just(
+                (Prepared) Conversion.toResult(
+                    response,
+                    Conversion.toInternal(parameters.protocolVersion()),
+                    Collections.emptyList()));
+          });
+
+          if (!TPCUtils.isTPCThread()) {
+            return RxThreads
+                .subscribeOn(resp, TPC.bestTPCScheduler(), TPCTaskType.EXECUTE_STATEMENT);
+          }
+
+          return resp;
+        }).subscribe(future::complete, future::completeExceptionally);
+      } catch (Exception e) {
+        future.completeExceptionally(e);
+      }
+
+      return future;
+    }
+
+    @Override
     public CompletableFuture<Result> batch(
         Batch batch, Parameters parameters, long queryStartNanoTime) {
 
@@ -639,6 +694,7 @@ public class DsePersistence
   }
 
   private static class PullRequestGetter {
+
     private static final Method nonCompletedPullRequestsMethod;
     private static final Object scheduler; // PullRequestScheduler
 

@@ -192,6 +192,19 @@ public interface Persistence {
     CompletableFuture<Result.Prepared> prepare(String query, Parameters parameters);
 
     /**
+     * Prepare a query on this connection without caching the prepared query in the persistence
+     * layer. It doesn't handle warnings or tracing so this shouldn't be exposed externally.
+     *
+     * @param query the query to prepare.
+     * @param parameters the parameters for the preparation (note that preparation only use a subset
+     *     of parameters).
+     * @return a future that, on completion of the preparation, provides its result. Please see the
+     *     {@link #execute} method for warnings regarding the completion of that future. The same
+     *     warnings apply for this method as well.
+     */
+    CompletableFuture<Result.Prepared> prepareNoCache(String query, Parameters parameters);
+
+    /**
      * Executes a statement on this connection.
      *
      * @param statement the statement to execute.
@@ -203,12 +216,11 @@ public interface Persistence {
      *     potentially performance sensitive, thread. As such, consumers should <b>not</b> "chain"
      *     costly/blocking operations on this future without passing their own executor. In other
      *     words, do not do something like: <code>
-     *       execute(...).thenRun(() -> { someBlockingOperation(); })
-     *     </code> Instead, use one of the "async" variants of {@link CompletableFuture}, namely:
-     *     <code>
-     *       // you can also provide your own executor below obviously
-     *       execute(...).thenRunAsync(() -> { someBlockingOperation(); })
-     *     </code>
+     *      execute(...).thenRun(() -> { someBlockingOperation(); })
+     * </code> Instead, use one of the "async" variants of {@link CompletableFuture}, namely: <code>
+     * // you can also provide your own executor below obviously execute(...).thenRunAsync(() -> {
+     * someBlockingOperation(); })
+     * </code>
      */
     CompletableFuture<Result> execute(
         Statement statement, Parameters parameters, long queryStartNanoTime);

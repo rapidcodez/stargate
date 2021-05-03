@@ -23,17 +23,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.Uninterruptibles;
 import io.stargate.auth.AuthorizationService;
-import io.stargate.db.Authenticator;
-import io.stargate.db.Batch;
-import io.stargate.db.BoundStatement;
-import io.stargate.db.ClientInfo;
-import io.stargate.db.EventListener;
-import io.stargate.db.PagingPosition;
-import io.stargate.db.Parameters;
-import io.stargate.db.Persistence;
-import io.stargate.db.Result;
-import io.stargate.db.SimpleStatement;
-import io.stargate.db.Statement;
+import io.stargate.db.*;
+import io.stargate.db.Result.Prepared;
 import io.stargate.db.cassandra.impl.interceptors.DefaultQueryInterceptor;
 import io.stargate.db.cassandra.impl.interceptors.QueryInterceptor;
 import io.stargate.db.datastore.common.AbstractCassandraPersistence;
@@ -63,6 +54,7 @@ import org.apache.cassandra.config.ViewDefinition;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.cql3.statements.BatchStatement;
+import org.apache.cassandra.cql3.statements.ParsedStatement;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.marshal.UserType;
 import org.apache.cassandra.exceptions.AuthenticationException;
@@ -503,6 +495,20 @@ public class CassandraPersistence
           // that it's only computed now.
           System.nanoTime(),
           () -> new PrepareMessage(query));
+    }
+
+    @Override
+    public CompletableFuture<Prepared> prepareNoCache(String query, Parameters parameters) {
+      return runOnExecutor(
+          () -> {
+            ParsedStatement.Prepared prepared = QueryProcessor.getStatement(query, clientState);
+            String toHash = parameters.defaultKeyspace().map(k -> k + query).orElse(query);
+            MD5Digest statementId = MD5Digest.compute(toHash);
+            ResultMessage.Prepared response = new ResultMessage.Prepared(statementId, prepared);
+            return (Prepared)
+                Conversion.toResult(response, Conversion.toInternal(parameters.protocolVersion()));
+          },
+          false);
     }
 
     @Override
