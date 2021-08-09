@@ -214,7 +214,7 @@ class QueryHandler extends MessageHandler<Query, Prepared> {
       agreementFuture.complete(null);
       return;
     }
-    if (remainingAttempts == 1) {
+    if (remainingAttempts <= 1) {
       agreementFuture.completeExceptionally(
           new IllegalStateException(
               "Failed to reach schema agreement after "
