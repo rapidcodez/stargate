@@ -45,6 +45,7 @@ import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -108,7 +109,8 @@ public class BaseServiceTest {
         InProcessServerBuilder.forName(SERVER_NAME)
             .directExecutor()
             .intercept(new MockInterceptor())
-            .addService(new Service(persistence, mock(Metrics.class)))
+            .addService(
+                new Service(persistence, mock(Metrics.class), mock(ScheduledExecutorService.class)))
             .build();
     try {
       server.start();

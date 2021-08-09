@@ -26,6 +26,7 @@ import io.stargate.db.AuthenticatedUser;
 import io.stargate.db.ClientInfo;
 import io.stargate.db.Persistence;
 import io.stargate.db.Persistence.Connection;
+import io.stargate.db.Result;
 import io.stargate.db.Result.Prepared;
 import io.stargate.proto.QueryOuterClass.Batch;
 import io.stargate.proto.QueryOuterClass.Query;
@@ -35,6 +36,7 @@ import java.net.SocketAddress;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nullable;
 import org.immutables.value.Value;
 
@@ -55,6 +57,8 @@ public class Service extends io.stargate.proto.StargateGrpc.StargateImplBase {
   @SuppressWarnings("unused")
   private final Metrics metrics;
 
+  private final ScheduledExecutorService executor;
+
   /** Used as key for the the local prepare cache. */
   @Value.Immutable
   interface PrepareInfo {
@@ -68,9 +72,10 @@ public class Service extends io.stargate.proto.StargateGrpc.StargateImplBase {
     String cql();
   }
 
-  public Service(Persistence persistence, Metrics metrics) {
+  public Service(Persistence persistence, Metrics metrics, ScheduledExecutorService executor) {
     this.persistence = persistence;
     this.metrics = metrics;
+    this.executor = executor;
     assert this.metrics != null;
   }
 
@@ -79,7 +84,8 @@ public class Service extends io.stargate.proto.StargateGrpc.StargateImplBase {
     newConnection(responseObserver)
         .ifPresent(
             connection ->
-                new QueryHandler(query, connection, preparedCache, persistence, responseObserver)
+                new QueryHandler(
+                        query, connection, preparedCache, persistence, executor, responseObserver)
                     .handle());
   }
 
@@ -124,14 +130,15 @@ public class Service extends io.stargate.proto.StargateGrpc.StargateImplBase {
 
   static class ResponseAndTraceId {
 
-    @Nullable UUID tracingId;
-    Response.Builder responseBuilder;
+    final @Nullable UUID tracingId;
+    final Response.Builder responseBuilder;
 
-    void setTracingId(UUID tracingId) {
-      this.tracingId = tracingId;
+    static ResponseAndTraceId from(Result result, Response.Builder responseBuilder) {
+      return new ResponseAndTraceId(result.getTracingId(), responseBuilder);
     }
 
-    void setResponseBuilder(Response.Builder responseBuilder) {
+    private ResponseAndTraceId(@Nullable UUID tracingId, Response.Builder responseBuilder) {
+      this.tracingId = tracingId;
       this.responseBuilder = responseBuilder;
     }
 

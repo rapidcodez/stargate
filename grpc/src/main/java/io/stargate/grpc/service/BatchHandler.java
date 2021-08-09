@@ -100,9 +100,7 @@ class BatchHandler extends MessageHandler<Batch, io.stargate.db.Batch> {
   }
 
   @Override
-  protected ResponseAndTraceId buildResponse(Result result) {
-    ResponseAndTraceId responseAndTraceId = new ResponseAndTraceId();
-    responseAndTraceId.setTracingId(result.getTracingId());
+  protected CompletionStage<ResponseAndTraceId> buildResponse(Result result) {
     Response.Builder responseBuilder = makeResponseBuilder(result);
 
     if (result.kind != Result.Kind.Void && result.kind != Result.Kind.Rows) {
@@ -122,8 +120,7 @@ class BatchHandler extends MessageHandler<Batch, io.stargate.db.Batch> {
       }
     }
 
-    responseAndTraceId.setResponseBuilder(responseBuilder);
-    return responseAndTraceId;
+    return CompletableFuture.completedFuture(ResponseAndTraceId.from(result, responseBuilder));
   }
 
   @Override
