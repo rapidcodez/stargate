@@ -76,37 +76,68 @@ public class BatchParametersTest extends BaseServiceTest {
 
   public static Stream<Arguments> batchParameterValues() {
     return Stream.of(
-        arguments(batchParameters().build(), Parameters.builder().build()),
+        arguments(
+            batchParameters().build(),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .build()),
         arguments(
             batchParameters().setKeyspace(StringValue.newBuilder().setValue("abc")).build(),
-            Parameters.builder().defaultKeyspace("abc").build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .defaultKeyspace("abc")
+                .build()),
         arguments(
             batchParameters()
                 .setConsistency(ConsistencyValue.newBuilder().setValue(Consistency.THREE))
                 .build(),
-            Parameters.builder().consistencyLevel(ConsistencyLevel.THREE).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.THREE)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .build()),
         arguments(
             batchParameters()
                 .setSerialConsistency(
                     ConsistencyValue.newBuilder().setValue(Consistency.LOCAL_SERIAL))
                 .build(),
-            Parameters.builder().serialConsistencyLevel(ConsistencyLevel.LOCAL_SERIAL).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.LOCAL_SERIAL)
+                .build()),
         arguments(
             batchParameters()
                 .setNowInSeconds(Int32Value.newBuilder().setValue(12345).build())
                 .build(),
-            Parameters.builder().nowInSeconds(12345).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .nowInSeconds(12345)
+                .build()),
         arguments(
             batchParameters()
                 .setTimestamp(Int64Value.newBuilder().setValue(1234567890).build())
                 .build(),
-            Parameters.builder().defaultTimestamp(1234567890).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .defaultTimestamp(1234567890)
+                .build()),
         arguments(
             batchParameters().setTracing(true).build(),
-            Parameters.builder().tracingRequested(true).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .tracingRequested(true)
+                .build()),
         arguments(
             batchParameters().setTracing(false).build(),
-            Parameters.builder().tracingRequested(false).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .tracingRequested(false)
+                .build()),
         arguments(
             batchParameters()
                 .setKeyspace(StringValue.newBuilder().setValue("def"))

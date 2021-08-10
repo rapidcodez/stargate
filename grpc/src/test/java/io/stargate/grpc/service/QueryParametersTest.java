@@ -81,42 +81,79 @@ public class QueryParametersTest extends BaseServiceTest {
 
   public static Stream<Arguments> queryParameterValues() {
     return Stream.of(
-        arguments(cqlQueryParameters().build(), Parameters.builder().build()),
+        arguments(
+            cqlQueryParameters().build(),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .build()),
         arguments(
             cqlQueryParameters().setKeyspace(StringValue.newBuilder().setValue("abc")).build(),
-            Parameters.builder().defaultKeyspace("abc").build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .defaultKeyspace("abc")
+                .build()),
         arguments(
             cqlQueryParameters()
                 .setConsistency(ConsistencyValue.newBuilder().setValue(Consistency.THREE))
                 .build(),
-            Parameters.builder().consistencyLevel(ConsistencyLevel.THREE).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.THREE)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .build()),
         arguments(
             cqlQueryParameters()
                 .setSerialConsistency(
                     ConsistencyValue.newBuilder().setValue(Consistency.LOCAL_SERIAL))
                 .build(),
-            Parameters.builder().serialConsistencyLevel(ConsistencyLevel.LOCAL_SERIAL).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.LOCAL_SERIAL)
+                .build()),
         arguments(
             cqlQueryParameters()
                 .setNowInSeconds(Int32Value.newBuilder().setValue(12345).build())
                 .build(),
-            Parameters.builder().nowInSeconds(12345).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .nowInSeconds(12345)
+                .build()),
         arguments(
             cqlQueryParameters()
                 .setTimestamp(Int64Value.newBuilder().setValue(1234567890).build())
                 .build(),
-            Parameters.builder().defaultTimestamp(1234567890).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .defaultTimestamp(1234567890)
+                .build()),
         arguments(
             cqlQueryParameters().setTracing(true).build(),
-            Parameters.builder().tracingRequested(true).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .tracingRequested(true)
+                .build()),
         arguments(
             cqlQueryParameters().setTracing(false).build(),
-            Parameters.builder().tracingRequested(false).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .tracingRequested(false)
+                .build()),
         arguments(
             cqlQueryParameters()
                 .setPageSize(Int32Value.newBuilder().setValue(99999).build())
                 .build(),
-            Parameters.builder().pageSize(99999).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .pageSize(99999)
+                .build()),
         arguments(
             cqlQueryParameters()
                 .setPagingState(
@@ -124,7 +161,11 @@ public class QueryParametersTest extends BaseServiceTest {
                         .setValue(ByteString.copyFrom(new byte[] {'a', 'b', 'c'}))
                         .build())
                 .build(),
-            Parameters.builder().pagingState(ByteBuffer.wrap(new byte[] {'a', 'b', 'c'})).build()),
+            Parameters.builder()
+                .consistencyLevel(ConsistencyLevel.LOCAL_QUORUM)
+                .serialConsistencyLevel(ConsistencyLevel.SERIAL)
+                .pagingState(ByteBuffer.wrap(new byte[] {'a', 'b', 'c'}))
+                .build()),
         arguments(
             cqlQueryParameters()
                 .setKeyspace(StringValue.newBuilder().setValue("def"))
