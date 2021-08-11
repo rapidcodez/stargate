@@ -32,6 +32,7 @@ import io.stargate.proto.QueryOuterClass.Query;
 import io.stargate.proto.QueryOuterClass.Response;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
@@ -43,6 +44,7 @@ public class Service extends io.stargate.proto.StargateGrpc.StargateImplBase {
   public static final Context.Key<AuthenticationSubject> AUTHENTICATION_KEY =
       Context.key("authentication");
   public static final Context.Key<SocketAddress> REMOTE_ADDRESS_KEY = Context.key("remoteAddress");
+  public static final Context.Key<Map<String, String>> HEADERS_KEY = Context.key("headers");
 
   private static final InetSocketAddress DUMMY_ADDRESS = new InetSocketAddress(9042);
 
@@ -111,6 +113,8 @@ public class Service extends io.stargate.proto.StargateGrpc.StargateImplBase {
       if (user.token() != null) {
         connection.clientInfo().ifPresent(c -> c.setAuthenticatedUser(user));
       }
+      Map<String, String> headers = HEADERS_KEY.get();
+      connection.setCustomProperties(headers);
       return Optional.of(connection);
     } catch (Throwable throwable) {
       responseObserver.onError(
